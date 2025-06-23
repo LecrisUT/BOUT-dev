@@ -18,6 +18,11 @@ python:
    install:
    - requirements: manual/sphinx/requirements.txt
 
+submodules:
+  include:
+    - externalpackages/mpark.variant
+    - externalpackages/fmt
+
 
 build:
   os: ubuntu-22.04

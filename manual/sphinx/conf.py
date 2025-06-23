@@ -74,34 +74,6 @@ if on_readthedocs:
         "crosslines",
     ]
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
-    print(os.environ)
-    print(sys.argv)
-    python = sys.argv[0]
-    pydir = "/".join(python.split("/")[:-2])
-    os.system("which clang-format")
-    os.system("which clang-format-6.0")
-    os.system(
-        "git submodule update --init --recursive ../../externalpackages/mpark.variant"
-    )
-    pwd = "/".join(os.getcwd().split("/")[:-2])
-    os.system("git submodule update --init --recursive ../../externalpackages/fmt")
-    cmake = (
-        "cmake  . -DBOUT_USE_FFTW=ON"
-        + " -DBOUT_USE_LAPACK=OFF"
-        + " -DBOUT_ENABLE_PYTHON=ON"
-        + " -DBOUT_UPDATE_GIT_SUBMODULE=OFF"
-        + " -DBOUT_TESTS=OFF"
-        + " -DBOUT_ALLOW_INSOURCE_BUILD=ON"
-        + f" -DPython3_ROOT_DIR={pydir}"
-        + f" -Dmpark_variant_DIR={pwd}/externalpackages/mpark.variant/"
-        + f" -Dfmt_DIR={pwd}/externalpackages/fmt/"
-    )
-    # os.system("mkdir ../../build")
-    os.system("echo " + cmake)
-    x = os.system("cd ../.. ;" + cmake)
-    assert x == 0
-    x = os.system("cd ../.. ; make -j 2 -f Makefile")
-    assert x == 0
 
 # -- General configuration ------------------------------------------------
 
@@ -297,9 +269,51 @@ texinfo_documents = [
 def setup(app: Sphinx) -> None:
     """Setup the custom sphinx helpers."""
 
+    # Note, order matters, although you can also fix the order using priority
+    if on_readthedocs:
+        # TODO: Make this more general and allow to be run within a cmake build
+        app.connect("builder-inited", run_cmake)
+
     if has_breathe:
         # Add breathe generation
         app.connect("builder-inited", run_doxygen)
+
+
+def run_cmake(app: Sphinx) -> None:
+    """Run CMake and build everything."""
+
+    # TODO: it is not really necessary to build the whole project, just the python modules.
+    #  A dummy implementation can be used to simplify things
+
+    # Show debug information (ported from previous implementation)
+    print(os.environ)
+    print(sys.argv)
+    subprocess.call(["which", "clang-format"])
+    subprocess.call(["which", "clang-format-6.0"])
+
+    sphinx_dir = app.srcdir
+    cmake_srcdir = sphinx_dir.parent.parent
+
+    # Run the actual CMake commands
+    subprocess.check_call(
+        [
+            "cmake",
+            # TODO: Use a separate build directory. Right now we are building in-src
+            "-S",
+            cmake_srcdir,
+            "-DBOUT_USE_FFTW:BOOL=ON",
+            "-DBOUT_USE_LAPACK:BOOL=OFF",
+            "-DBOUT_ENABLE_PYTHON:BOOL=ON",
+            "-DBOUT_UPDATE_GIT_SUBMODULE:BOOL=OFF",
+            "-DBOUT_TESTS:BOOL=OFF",
+            "-DBOUT_ALLOW_INSOURCE_BUILD:BOOL=ON",
+            f"-DPython3_ROOT_DIR:PATH={sys.prefix}",
+            f"-Dmpark_variant_DIR:PATH={cmake_srcdir}/externalpackages/mpark.variant/",
+            f"-Dfmt_DIR:PATH={cmake_srcdir}/externalpackages/fmt/",
+        ],
+        cwd=cmake_srcdir,
+    )
+    subprocess.check_call(["cmake", "--build", cmake_srcdir])
 
 
 def run_doxygen(app: Sphinx) -> None:
