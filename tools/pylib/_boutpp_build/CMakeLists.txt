@@ -1,3 +1,10 @@
+cmake_minimum_required(VERSION 3.17...3.20)
+
+project(BOUT++_Python
+    DESCRIPTION "Python bindings for BOUT++"
+    LANGUAGES CXX
+)
+
 # Error if Python API was explicitly requested, otherwise just a
 # warning and don't build Python API
 macro(bout_python_maybe_error VAR NAME)
