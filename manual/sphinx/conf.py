@@ -17,24 +17,28 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
+from __future__ import annotations
+
 import argparse
-
-try:
-    from breathe import apidoc
-
-    has_breathe = True
-except ImportError:
-    print("breathe module not installed")
-    has_breathe = False
-
+import importlib.metadata
 import os
 import subprocess
 import sys
+import typing
+
+if typing.TYPE_CHECKING:
+    from sphinx.application import Sphinx
 
 sys.path.append("../../tools/pylib")
 
 # Are we running on readthedocs?
 on_readthedocs = os.environ.get("READTHEDOCS") == "True"
+try:
+    importlib.metadata.version("breathe")
+    has_breathe = True
+except importlib.metadata.PackageNotFoundError:
+    print("breathe module not installed")
+    has_breathe = False
 
 if on_readthedocs:
     from unittest.mock import MagicMock
@@ -99,41 +103,6 @@ if on_readthedocs:
     x = os.system("cd ../.. ; make -j 2 -f Makefile")
     assert x == 0
 
-
-# readthedocs currently runs out of memory if we actually dare to try to do this
-if has_breathe:
-    # Run doxygen to generate the XML sources
-    if on_readthedocs:
-        subprocess.call("cd ../doxygen; doxygen Doxyfile_readthedocs", shell=True)
-    else:
-        subprocess.call("cd ../doxygen; doxygen Doxyfile", shell=True)
-    # Now use breathe.apidoc to autogen rst files for each XML file
-    apidoc_args = argparse.Namespace(
-        destdir="_breathe_autogen/",
-        dryrun=False,
-        force=True,
-        notoc=False,
-        outtypes=("file"),
-        project="BOUT++",
-        rootpath="../doxygen/bout/xml",
-        suffix="rst",
-        members=True,
-        quiet=False,
-    )
-    apidoc_args.rootpath = os.path.abspath(apidoc_args.rootpath)
-    if not os.path.isdir(apidoc_args.destdir):
-        if not apidoc_args.dryrun:
-            os.makedirs(apidoc_args.destdir)
-    apidoc.recurse_tree(apidoc_args)
-    for key, value in apidoc.TYPEDICT.items():
-        apidoc.create_modules_toc_file(key, value, apidoc_args)
-
-    # -- Options for breathe extension ----------------------------------------
-
-    breathe_projects = {"BOUT++": "../doxygen/bout/xml"}
-    breathe_default_project = "BOUT++"
-    breathe_default_members = ("members",)
-
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -153,6 +122,9 @@ extensions = [
 
 if has_breathe:
     extensions.append("breathe")
+    breathe_projects = {"BOUT++": "../doxygen/bout/xml"}
+    breathe_default_project = "BOUT++"
+    breathe_default_members = ("members",)
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -320,3 +292,49 @@ texinfo_documents = [
         "Miscellaneous",
     ),
 ]
+
+
+def setup(app: Sphinx) -> None:
+    """Setup the custom sphinx helpers."""
+
+    if has_breathe:
+        # Add breathe generation
+        app.connect("builder-inited", run_doxygen)
+
+
+def run_doxygen(app: Sphinx) -> None:
+    """Run doxygen to generate the XML sources."""
+    from breathe import apidoc
+
+    sphinx_dir = app.srcdir
+    doxygen_dir = sphinx_dir.parent / "doxygen"
+
+    # readthedocs currently runs out of memory if we actually dare to try to do this
+    doxyfile = "Doxyfile_readthedocs" if on_readthedocs else "Doxyfile"
+    subprocess.call(
+        ["doxygen", doxyfile],
+        shell=True,
+        cwd=doxygen_dir,
+    )
+
+    # Now use breathe.apidoc to autogen rst files for each XML file
+    # TODO: These might not be needed
+    apidoc_args = argparse.Namespace(
+        destdir="_breathe_autogen/",
+        dryrun=False,
+        force=True,
+        notoc=False,
+        outtypes=("file"),
+        project="BOUT++",
+        rootpath=doxygen_dir / "bout/xml",
+        suffix="rst",
+        members=True,
+        quiet=False,
+    )
+    apidoc_args.rootpath = os.path.abspath(apidoc_args.rootpath)
+    if not os.path.isdir(apidoc_args.destdir):
+        if not apidoc_args.dryrun:
+            os.makedirs(apidoc_args.destdir)
+    apidoc.recurse_tree(apidoc_args)
+    for key, value in apidoc.TYPEDICT.items():
+        apidoc.create_modules_toc_file(key, value, apidoc_args)
