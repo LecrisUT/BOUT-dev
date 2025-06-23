@@ -293,14 +293,16 @@ def run_cmake(app: Sphinx) -> None:
 
     sphinx_dir = app.srcdir
     cmake_srcdir = sphinx_dir.parent.parent
+    cmake_builddir = cmake_srcdir / "build-sphinx"
 
     # Run the actual CMake commands
     subprocess.check_call(
         [
             "cmake",
-            # TODO: Use a separate build directory. Right now we are building in-src
             "-S",
             cmake_srcdir,
+            "-B",
+            cmake_builddir,
             "-DBOUT_USE_FFTW:BOOL=ON",
             "-DBOUT_USE_LAPACK:BOOL=OFF",
             "-DBOUT_ENABLE_PYTHON:BOOL=ON",
@@ -311,9 +313,8 @@ def run_cmake(app: Sphinx) -> None:
             f"-Dmpark_variant_DIR:PATH={cmake_srcdir}/externalpackages/mpark.variant/",
             f"-Dfmt_DIR:PATH={cmake_srcdir}/externalpackages/fmt/",
         ],
-        cwd=cmake_srcdir,
     )
-    subprocess.check_call(["cmake", "--build", cmake_srcdir])
+    subprocess.check_call(["cmake", "--build", cmake_builddir])
 
 
 def run_doxygen(app: Sphinx) -> None:
